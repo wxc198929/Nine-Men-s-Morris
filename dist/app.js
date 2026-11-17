@@ -1,13 +1,13 @@
 import {POINTS,LABELS,MILLS,newGame,count,legalActions,play,chooseTurn} from './engine.js';
 const $ = id => document.getElementById(id);
 const STORAGE = 'morris-no-flying-v1';
-let mode = 'ai', level = 'normal', selected = null, generation = 0, busy = false, worker = null;
+let mode = 'ai', level = 'hard', selected = null, generation = 0, busy = false, worker = null;
 let timeline = [{state:newGame(),note:'棋盘已备好，白方先行。',actor:0}];
 try {
   const saved = JSON.parse(localStorage.getItem(STORAGE));
   if (saved?.version === 1 && ['ai','local'].includes(saved.mode) && Array.isArray(saved.timeline) && saved.timeline.length && saved.timeline.every(f => f.state?.board?.length === 24 && f.state.board.every(v => [0,1,2].includes(v)) && f.state.reserves?.length === 2 && f.state.reserves.every(v => Number.isInteger(v) && v >= 0 && v <= 9) && [1,2].includes(f.state.player) && f.state.repetitions && typeof f.note === 'string')) {
     mode = saved.mode;
-    level = saved.level === 'easy' ? 'easy' : 'normal';
+    level = ['easy','normal','hard'].includes(saved.level) ? saved.level : 'hard';
     timeline = saved.timeline;
   }
 } catch { /* Storage may be unavailable in private browsing. */ }
@@ -87,7 +87,7 @@ function render() {
   $('turn-number').textContent = `第 ${s.turn} 手`;
   $('status-label').textContent = over ? s.draw ? '握手言和' : '胜负已分' : computerTurn ? '电脑正在思考' : `轮到${s.player === 1 ? '白' : '黑'}方`;
   $('status-title').textContent = over ? s.draw ? '这局，平分秋色' : `${s.winner === 1 ? '白' : '黑'}方获胜` : s.capture ? '成三了，吃掉一子' : placing ? '落下一枚棋子' : selected === null ? '选一枚棋子出发' : '走到相邻的空点';
-  $('status-copy').textContent = over ? s.reason : computerTurn ? '稍等片刻，对手正在斟酌下一步。' : s.capture ? '点击虚线圈出的对方棋子，将它移出棋盘。' : placing ? '点击棋盘上的亮点，试着让三子连成一线。' : selected === null ? '先选中己方棋子，再点击相邻的亮点。' : '本局不允许飞行，只能沿线移动一步。';
+  $('status-copy').textContent = over ? s.reason : computerTurn ? level === 'hard' ? '高手正在推演后续变化，请稍候。' : '稍等片刻，对手正在斟酌下一步。' : s.capture ? '点击虚线圈出的对方棋子，将它移出棋盘。' : placing ? '点击棋盘上的亮点，试着让三子连成一线。' : selected === null ? '先选中己方棋子，再点击相邻的亮点。' : '本局不允许飞行，只能沿线移动一步。';
   for (const p of [1,2]) {
     const n = count(s,p);
     $(`player-${p}`).classList.toggle('current',!over && s.player === p);
@@ -138,14 +138,14 @@ function scheduleAI() {
   function fallback() {
     if (generation !== id) return;
     worker?.terminate();worker = null;
-    try {deliver(chooseTurn(s,level));}
+    try {deliver(chooseTurn(s,level === 'hard' ? 'normal' : level));}
     catch {deliver(legalActions(s).slice(0,1));}
   }
   try {
-    worker = new Worker(new URL('./ai-worker.js',import.meta.url),{type:'module'});
+    worker = new Worker(new URL('./ai-worker.js?v=2',import.meta.url),{type:'module'});
     worker.onmessage = ({data}) => {
+      if (generation !== id || data.id !== id) return;
       worker?.terminate();worker = null;
-      if (generation !== id) return;
       if (data.error) fallback();else deliver(data.actions);
     };
     worker.onerror = fallback;
