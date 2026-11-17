@@ -58,12 +58,14 @@ test('high difficulty can win by trapping the last mobile opponent piece',() => 
   assert.equal(apply(s,result.actions).winner,1);
 });
 
-test('high difficulty finds a quiet mill-opening move that sets up a multi-turn win',() => {
+test('high difficulty finds a quiet move that sets up a multi-turn win',() => {
   const s = position([0,3,16,19,22],[2,13,14,15]);
   const result = searchBestTurn(s,{timeMs:1000,maxDepth:8,nodeLimit:100000});
-  // Leave the d-file mill, then threaten to close it again on the following turn.
-  // This is a positional setup: no piece is captured on the chosen move itself.
-  assert.deepEqual(result.actions,[{type:'move',from:22,to:23}]);
+  // Several quiet setups have the same winning score. Test the outcome rather
+  // than requiring one coordinate, since high difficulty may now vary ties.
+  assert.equal(result.actions.length,1);
+  assert.equal(result.actions[0].type,'move');
+  assert.doesNotThrow(() => apply(s,result.actions));
   assert.ok(result.depth >= 3);
   assert.ok(result.score > 999900);
 });
@@ -95,4 +97,42 @@ test('search preserves state and returns a legal move when interrupted',() => {
 test('normal and easy modes retain legal full turns',() => {
   const s = play(newGame(),{type:'place',at:4});
   for (const level of ['normal','easy']) assert.doesNotThrow(() => apply(s,chooseTurn(s,level)));
+});
+
+function seededRandom(seed) {
+  return () => {seed = (seed*1664525+1013904223)>>>0;return seed/4294967296;};
+}
+test('identical openings produce different legal responses with the same completed-depth score',() => {
+  const s = play(newGame(),{type:'place',at:0});
+  const settings = {maxDepth:4,timeMs:3000,nodeLimit:300000};
+  const baseline = searchBestTurn(s,{...settings,variety:false});
+  assert.equal(baseline.depth,4);
+  const replies = new Set();
+  for (let seed=1;seed<=16;seed++) {
+    const result = searchBestTurn(s,{...settings,random:seededRandom(seed*937)});
+    assert.equal(result.depth,baseline.depth);
+    assert.equal(result.score,baseline.score);
+    assert.doesNotThrow(() => apply(s,result.actions));
+    replies.add(actionKey(result.actions));
+  }
+  assert.ok(replies.size >= 2,`Expected varied replies, received ${replies.size}`);
+});
+test('remembering the last opening response avoids repeating it across new games',() => {
+  const s = play(newGame(),{type:'place',at:0});
+  let previous = null;
+  for (let game=0;game<8;game++) {
+    // The same random stream deliberately tests the novelty memory itself.
+    const result = searchBestTurn(s,{maxDepth:4,timeMs:3000,nodeLimit:300000,random:seededRandom(42),avoidActions:previous ? [previous] : []});
+    const choice = actionKey(result.actions);
+    assert.notEqual(choice,previous);
+    previous = choice;
+    assert.doesNotThrow(() => apply(s,result.actions));
+  }
+});
+test('variation and novelty never override a necessary defensive move',() => {
+  const s = position([0,1],[3],{player:2,reserves:[7,8]});
+  for (let seed=1;seed<=6;seed++) {
+    const result = searchBestTurn(s,{maxDepth:4,timeMs:1000,random:seededRandom(seed),avoidActions:[actionKey([{type:'place',at:2}])]});
+    assert.deepEqual(result.actions[0],{type:'place',at:2});
+  }
 });

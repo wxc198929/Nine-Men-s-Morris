@@ -1,6 +1,12 @@
-import {POINTS,LABELS,MILLS,newGame,count,legalActions,play,chooseTurn} from './engine.js';
+import {POINTS,LABELS,MILLS,newGame,count,legalActions,play,chooseTurn,positionKey} from './engine.js';
 const $ = id => document.getElementById(id);
 const STORAGE = 'morris-no-flying-v1';
+const VARIETY_STORAGE = 'morris-ai-variety-v1';
+let recentAI = {};
+try {
+  const savedChoices = JSON.parse(localStorage.getItem(VARIETY_STORAGE));
+  if (savedChoices && typeof savedChoices === 'object' && !Array.isArray(savedChoices)) recentAI = Object.fromEntries(Object.entries(savedChoices).filter(([,choice]) => typeof choice === 'string').slice(-128));
+} catch {}
 let mode = 'ai', level = 'hard', selected = null, generation = 0, busy = false, worker = null;
 let timeline = [{state:newGame(),note:'棋盘已备好，白方先行。',actor:0}];
 try {
@@ -129,6 +135,11 @@ function scheduleAI() {
   function deliver(actions) {
     setTimeout(() => {
       if (generation !== id) return;
+      const position = positionKey(s);
+      delete recentAI[position];
+      recentAI[position] = JSON.stringify(actions);
+      recentAI = Object.fromEntries(Object.entries(recentAI).slice(-128));
+      try {localStorage.setItem(VARIETY_STORAGE,JSON.stringify(recentAI));} catch {}
       for (const a of actions) applyAction(a);
       busy = false;
       render();
@@ -142,14 +153,14 @@ function scheduleAI() {
     catch {deliver(legalActions(s).slice(0,1));}
   }
   try {
-    worker = new Worker(new URL('./ai-worker.js?v=2',import.meta.url),{type:'module'});
+    worker = new Worker(new URL('./ai-worker.js?v=3',import.meta.url),{type:'module'});
     worker.onmessage = ({data}) => {
       if (generation !== id || data.id !== id) return;
       worker?.terminate();worker = null;
       if (data.error) fallback();else deliver(data.actions);
     };
     worker.onerror = fallback;
-    worker.postMessage({id,state:s,level});
+    worker.postMessage({id,state:s,level,avoidActions:recentAI[positionKey(s)] ? [recentAI[positionKey(s)]] : []});
   } catch { fallback(); }
 }
 let pendingReset = null;

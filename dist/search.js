@@ -1,4 +1,4 @@
-import {MILLS,NEIGHBORS,completeTurns} from './engine.js';
+import {POINTS,MILLS,NEIGHBORS,completeTurns} from './engine.js';
 
 const FULL = 0xffffff;
 const MATE = 1000000;
@@ -6,6 +6,24 @@ const STOP = Symbol('search budget exhausted');
 const millMasks = MILLS.map(line => line.reduce((mask,i) => mask | (1 << i),0));
 const millsAt = NEIGHBORS.map((_,i) => millMasks.filter(mask => mask & (1 << i)));
 const adjacency = NEIGHBORS.map(list => list.reduce((mask,i) => mask | (1 << i),0));
+const symmetries = Array.from({length:8},(_,symmetry) => POINTS.map(([x,y]) => {
+  x -= 3;y -= 3;
+  if (symmetry >= 4) x = -x;
+  for (let turn=0;turn<symmetry%4;turn++) [x,y] = [-y,x];
+  return POINTS.findIndex(([px,py]) => px === x+3 && py === y+3);
+}));
+function openingVariants(s,actions) {
+  // During placement the reserve counts strictly decrease, so old positions
+  // cannot repeat. Only use symmetries that preserve every current piece.
+  if (s.capture || s.reserves.some(n => n === 0) || s.reserves[0]+s.reserves[1] < 12) return [actions];
+  const variants = new Map();
+  for (const map of symmetries) {
+    if (!s.board.every((piece,i) => s.board[map[i]] === piece)) continue;
+    const mapped = actions.map(a => a.type === 'move' ? {...a,from:map[a.from],to:map[a.to]} : {...a,at:map[a.at]});
+    variants.set(JSON.stringify(mapped),mapped);
+  }
+  return [...variants.values()];
+}
 const indexOf = bit => 31-Math.clz32(bit);
 function popcount(bits) {
   bits -= (bits >>> 1) & 0x55555555;
@@ -130,10 +148,12 @@ function restoreRepetitions(s) {
   return result;
 }
 /** Time-bounded iterative deepening. A depth counts complete moves, including captures. */
-export function searchBestTurn(s,{timeMs = 1800,maxDepth = 12,nodeLimit = 700000} = {}) {
+export function searchBestTurn(s,{timeMs = 1800,maxDepth = 12,nodeLimit = 700000,variety = true,random = Math.random,avoidActions = []} = {}) {
   const started = performance.now();
   const roots = searchSuccessors(s);
   if (!roots.length) return {actions:[],depth:0,nodes:0,elapsedMs:0,score:0};
+  const avoided = new Set(avoidActions);
+  for (const move of roots) move.preference = variety ? (avoided.has(JSON.stringify(move.actions)) ? 0 : 1)+random() : 0;
   const deadline = started+Math.max(1,timeMs);
   const repetitions = restoreRepetitions(s);
   let historyHash = 0;
@@ -214,21 +234,31 @@ export function searchBestTurn(s,{timeMs = 1800,maxDepth = 12,nodeLimit = 700000
     return value;
   }
   order(roots,key(pack(s),s.player),0);
+  if (variety) roots.sort((a,b) => b.rank-a.rank || b.preference-a.preference);
   bestMove = roots[0];
   for (let depth = 1;depth <= maxDepth;depth++) {
     let iterationBest = null, value = -Infinity, alpha = -Infinity;
-    roots.sort((a,b) => (b.code === bestMove.code)-(a.code === bestMove.code) || (b.score ?? b.rank)-(a.score ?? a.rank));
+    roots.sort((a,b) => (b.code === bestMove.code)-(a.code === bestMove.code) || (b.score ?? b.rank)-(a.score ?? a.rank) || b.preference-a.preference);
     try {
       for (const move of roots) {
         if (performance.now() >= deadline) throw STOP;
-        const score = withPosition(move.node,3-s.player,() => -visit(move.node,3-s.player,depth-1,-Infinity,-alpha,1,2));
+        let score = withPosition(move.node,3-s.player,() => -visit(move.node,3-s.player,depth-1,-Infinity,-alpha,1,2));
+        // A fail-low bound equal to alpha is not proof of an equal move.
+        // Re-search one integer point lower before using preference to break a tie.
+        if (variety && iterationBest && score === value && move.preference > iterationBest.preference) {
+          score = withPosition(move.node,3-s.player,() => -visit(move.node,3-s.player,depth-1,-Infinity,-(alpha-1),1,2));
+        }
         move.score = score;
-        if (score > value) {value = score;iterationBest = move;}
+        if (score > value || (score === value && iterationBest && move.preference > iterationBest.preference)) {value = score;iterationBest = move;}
         alpha = Math.max(alpha,value);
       }
       bestMove = iterationBest;bestScore = value;completedDepth = depth;
       if (Math.abs(value) > MATE-100) break;
     } catch (error) {if (error !== STOP) throw error;break;}
   }
-  return {actions:bestMove.actions,depth:completedDepth,nodes,elapsedMs:performance.now()-started,score:(completedDepth ? bestScore : -evaluate(bestMove.node)) || 0};
+  let alternatives = variety ? openingVariants(s,bestMove.actions) : [bestMove.actions];
+  const fresh = alternatives.filter(actions => !avoided.has(JSON.stringify(actions)));
+  if (fresh.length) alternatives = fresh;
+  const actions = alternatives[variety ? Math.floor(random()*alternatives.length) : 0];
+  return {actions,depth:completedDepth,nodes,elapsedMs:performance.now()-started,score:(completedDepth ? bestScore : -evaluate(bestMove.node)) || 0};
 }
