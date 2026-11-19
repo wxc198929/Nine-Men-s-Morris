@@ -1,2 +1,5 @@
 [functions.morris-api]
 verify_jwt = false
+
+[functions.wallgo-api]
+verify_jwt = false

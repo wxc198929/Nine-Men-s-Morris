@@ -7,7 +7,7 @@ const types = {'.html':'text/html; charset=utf-8','.js':'text/javascript; charse
 const server = http.createServer(async (req,res) => {
   try {
     const requested = decodeURIComponent(new URL(req.url,'http://localhost').pathname);
-    const file = path.resolve(root,'.' + (requested === '/' ? '/index.html' : requested));
+    const file = path.resolve(root,'.' + (requested.endsWith('/') ? requested+'index.html' : requested));
     if (!file.startsWith(root + path.sep) && file !== path.join(root,'index.html')) {res.writeHead(403).end();return;}
     const bytes = await readFile(file);
     res.writeHead(200,{'Content-Type':types[path.extname(file)] || 'application/octet-stream','Cache-Control':'no-store'}).end(bytes);
