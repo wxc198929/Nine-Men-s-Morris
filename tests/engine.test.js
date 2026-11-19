@@ -1,6 +1,6 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import {POINTS,MILLS,NEIGHBORS,newGame,legalActions,play,inMill,capturable,count,chooseTurn,positionKey} from '../dist/engine.js';
+import {POINTS,MILLS,NEIGHBORS,newGame,legalActions,play,inMill,capturable,count,chooseTurn,positionKey} from '../dist/game/nine-mens-morris/engine.js';
 function position(white,black,extra = {}) {
   const s = {...newGame(),reserves:[0,0],repetitions:{},...extra};
   white.forEach(i => s.board[i] = 1);black.forEach(i => s.board[i] = 2);return s;

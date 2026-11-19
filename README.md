@@ -1,16 +1,23 @@
-# 九子棋 · 方寸之间
+# 方寸之间 · 游戏目录
+两款游戏并列放在 `game/` 大目录下，目录页为 [游戏目录](https://wxc198929.github.io/Nine-Men-s-Morris/game/)。
+
+- [九子棋](https://wxc198929.github.io/Nine-Men-s-Morris/game/nine-mens-morris/)：`dist/game/nine-mens-morris/`
+- [墙壁围棋](https://wxc198929.github.io/Nine-Men-s-Morris/game/wall-go/)：`dist/game/wall-go/`
+- `dist/game/shared/`：共用样式、图标、账号配置及第三方库。
+
+原九子棋根地址与原 `/wall-go/` 地址自动跳转到对应的新地址，并保留查询参数与片段。游戏页点击左上角品牌可返回目录，菜单也可直接切换另一款游戏。浏览器中已有对局与共享登录仍沿用原存储。
 
 ## 墙壁围棋 WallGo
 
-游戏入口：`https://wxc198929.github.io/Nine-Men-s-Morris/wall-go/`。九子棋页与墙壁围棋页可以相互切换，共用注册与登录账号；房间和积分分别保存。
+游戏入口：`https://wxc198929.github.io/Nine-Men-s-Morris/game/wall-go/`。九子棋页与墙壁围棋页可以相互切换，共用注册与登录账号；房间和积分分别保存。
 
 墙壁围棋采用 [WallZero 论文 §2.1](https://arxiv.org/html/2606.17847#S2) 的双人规则：7×7 格，红方 B2/F6、蓝方 B6/F2 预置，按红蓝蓝红补齐各四枚。每回合先移动零到两步（允许拐弯，不能穿墙或越子），再在终点边上筑一道墙。每个回合以完整“移动＋筑墙”保存和提交。区域内仅有一方棋子时，整区归该方；空区中立，混色区待定。全部棋子分隔后比较总地盘；同分比较最大单块区域，再同则和。
 
 支持三级人机、同屏双人、好友联机、合法落点/筑墙提示、确定地盘着色、悔棋（本地）、自动续局、独立 Elo 榜。AI 在 Worker 中运行；高手最多搜索六层，约 1.8 秒预算，完整搜索前两层，后续使用候选走法筛选，因此不保证全局最优。搜索同分时随机选择，并在存在同等选择时避开上一局面用过的走法。
 
-前端在 `dist/wall-go/`，权威引擎副本在 `supabase/functions/wallgo-api/engine.js`。修改规则时同步两份，测试会校验一致性。`supabase/wallgo-schema.sql` 是已部署的托管迁移 `wallgo_online` 定义；`wallgo_profiles` 与 `wallgo_rooms` 独立于九子棋数据，并启用 RLS 与仅服务端写入权限。后台使用 `wallgo-api`，所有非排行榜请求都经过 Auth 用户校验。
+前端在 `dist/game/wall-go/`，权威引擎副本在 `supabase/functions/wallgo-api/engine.js`。修改规则时同步两份，测试会校验一致性。`supabase/wallgo-schema.sql` 是已部署的托管迁移 `wallgo_online` 定义；`wallgo_profiles` 与 `wallgo_rooms` 独立于九子棋数据，并启用 RLS 与仅服务端写入权限。后台使用 `wallgo-api`，所有非排行榜请求都经过 Auth 用户校验。
 
-本地启动后访问 `http://127.0.0.1:4173/wall-go/`；`node --test` 同时验证两款游戏。
+本地启动后访问 `http://127.0.0.1:4173/game/wall-go/`；`node --test` 同时验证两款游戏。
 
 上线校验：两款游戏的规则及 Worker 测试全部通过；真实临时双账号走完一盘 31 回合的联机对局，验证共享登录、版本冲突保护、后台计分、积分只结算一次、榜单隔离及表访问权限，并清理了测试数据。项目级 Auth 另有“泄露密码检测未启用”提示，沿用原有账号配置，参见 [Supabase 密码保护说明](https://supabase.com/docs/guides/auth/password-security#password-strength-and-leaked-password-protection)。
 
@@ -37,7 +44,7 @@
 npm start
 ```
 
-在浏览器打开 `http://127.0.0.1:4173`。请使用本地服务器，直接双击 HTML 文件可能无法加载模块和电脑对手。
+在浏览器打开 `http://127.0.0.1:4173/game/`。请使用本地服务器，直接双击 HTML 文件可能无法加载模块和电脑对手。
 
 运行规则检查：
 
@@ -81,11 +88,11 @@ npm test
 
 ## 后台维护
 
-`supabase/schema.sql` 记录已部署的数据库定义（托管迁移 `morris_online`、`explicit_server_only_policies`）。所有数据表启用 RLS，普通用户无直接读写权限；仅 Edge Function 内部的服务身份可调用写入函数。浏览器配置 `dist/online-config.js` 只有公开项目地址与 publishable key，不能放入 service-role 密钥。
+`supabase/schema.sql` 记录已部署的数据库定义（托管迁移 `morris_online`、`explicit_server_only_policies`）。所有数据表启用 RLS，普通用户无直接读写权限；仅 Edge Function 内部的服务身份可调用写入函数。浏览器配置 `dist/game/shared/online-config.js` 只有公开项目地址与 publishable key，不能放入 service-role 密钥。
 
 `supabase/functions/morris-api/index.ts` 使用固定版本 `@supabase/supabase-js@2.119.1`，浏览器使用同版本随附的 UMD 包及 MIT 许可证。排行榜匿名可读；其余请求均通过 `Auth.getUser` 验证用户，房间与积分更新在数据库事务中完成。`verify_jwt=false` 仅为匿名排行提供入口，不能移除处理器中的身份校验。
 
-游戏引擎同时保存在 `dist/engine.js` 与 `supabase/functions/morris-api/engine.js`，修改后必须同步；测试会比较两者一致性。前端每 2.5 秒同步棋局，重复局面三次判和、三子不能飞等规则与本地模式相同。
+游戏引擎同时保存在 `dist/game/nine-mens-morris/engine.js` 与 `supabase/functions/morris-api/engine.js`，修改后必须同步；测试会比较两者一致性。前端每 2.5 秒同步棋局，重复局面三次判和、三子不能飞等规则与本地模式相同。
 
 若重新部署项目：启用 Email provider；保持 Confirm email 关闭以匹配当前注册方式。若以后启用邮件验证或找回密码，先配置 SMTP、生产 Site URL 与允许跳转地址，再开放对应网页入口。生产地址为 `https://wxc198929.github.io/Nine-Men-s-Morris/`。
 

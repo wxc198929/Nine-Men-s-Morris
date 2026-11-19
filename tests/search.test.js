@@ -1,7 +1,7 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import {newGame,play,legalActions,completeTurns,positionKey,chooseTurn} from '../dist/engine.js';
-import {searchBestTurn,searchSuccessors} from '../dist/search.js';
+import {newGame,play,legalActions,completeTurns,positionKey,chooseTurn} from '../dist/game/nine-mens-morris/engine.js';
+import {searchBestTurn,searchSuccessors} from '../dist/game/nine-mens-morris/search.js';
 
 function position(white,black,extra = {}) {
   const s = {...newGame(),reserves:[0,0],repetitions:{},...extra};

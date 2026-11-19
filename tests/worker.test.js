@@ -1,10 +1,10 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import {Worker} from 'node:worker_threads';
-import {newGame,play} from '../dist/engine.js';
+import {newGame,play} from '../dist/game/nine-mens-morris/engine.js';
 
 test('the actual browser worker dispatches hard search and returns a legal full turn',async () => {
-  const moduleUrl = new URL('../dist/ai-worker.js',import.meta.url).href;
+  const moduleUrl = new URL('../dist/game/nine-mens-morris/ai-worker.js',import.meta.url).href;
   const worker = new Worker(`
     const {parentPort} = require('node:worker_threads');
     globalThis.self = {postMessage: message => parentPort.postMessage(message)};

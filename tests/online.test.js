@@ -1,7 +1,7 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import {readFile} from 'node:fs/promises';
-import {newGame,play} from '../dist/engine.js';
+import {newGame,play} from '../dist/game/nine-mens-morris/engine.js';
 import {nextState,createHandler} from '../supabase/functions/morris-api/handler.js';
 const room=()=>({white_id:'white',black_id:'black',status:'playing',state:newGame()});
 test('server rejects spectators, out-of-turn moves and illegal moves',()=>{
@@ -36,5 +36,5 @@ test('API rejects foreign origins and oversized requests',async()=>{
   assert.equal((await handle(new Request('https://example.test',{method:'POST',body:'x'.repeat(4097)}))).status,413);
 });
 test('client and authoritative server share exactly the same game engine',async()=>{
-  assert.equal(await readFile(new URL('../dist/engine.js',import.meta.url),'utf8'),await readFile(new URL('../supabase/functions/morris-api/engine.js',import.meta.url),'utf8'));
+  assert.equal(await readFile(new URL('../dist/game/nine-mens-morris/engine.js',import.meta.url),'utf8'),await readFile(new URL('../supabase/functions/morris-api/engine.js',import.meta.url),'utf8'));
 });

@@ -1,6 +1,6 @@
-import {config} from '../online-config.js';
+import {config} from '../shared/online-config.js';
 const $=id=>document.getElementById(id);
-const HOME='https://wxc198929.github.io/Nine-Men-s-Morris/wall-go/';
+const HOME='https://wxc198929.github.io/Nine-Men-s-Morris/game/wall-go/';
 export class OnlineController {
   constructor(changed) {
     this.changed=changed;this.user=null;this.profile=null;this.room=null;this.busy=false;this.active=false;this.connected=true;this.authMode='login';this.epoch=0;
