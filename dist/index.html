@@ -4,7 +4,7 @@
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width,initial-scale=1">
   <meta name="theme-color" content="#263b35">
-  <meta name="description" content="九子棋小游戏：三重方框、24个落点。支持人机与同屏双人对战，采用三子不能飞的规则。">
+  <meta name="description" content="九子棋小游戏：支持高手人机、同屏双人、好友联机和积分排行榜。三重方框、24个落点，采用三子不能飞的规则。">
   <title>九子棋 · 方寸之间</title>
   <link rel="icon" href="./icon.svg" type="image/svg+xml">
   <link rel="stylesheet" href="./style.css">
@@ -13,7 +13,7 @@
   <main class="app">
     <header class="masthead">
       <a class="brand" href="./" aria-label="九子棋首页"><span class="brand-mark" aria-hidden="true">井</span><span>方寸之间<span class="brand-en">THE MORRIS CLUB</span></span></a>
-      <button class="text-button" id="rules-open">玩法说明 <span aria-hidden="true">↗</span></button>
+      <nav class="header-actions" aria-label="游戏菜单"><button class="text-button" id="ranking-open">排行榜</button><button class="text-button" id="account-open">登录 / 注册</button><button class="text-button" id="rules-open">玩法说明</button></nav>
     </header>
     <section class="intro">
       <div><p class="eyebrow">NINE MEN'S MORRIS</p><h1>九子棋<span class="title-dot">。</span></h1><p class="intro-copy">九枚棋子，三重方圆。一局从容的较量。</p></div>
@@ -34,7 +34,13 @@
         <div class="board-bottom"><span><i class="hint-dot" aria-hidden="true"></i>亮点表示可落子的位置</span><span>24 点 · 9 子</span></div>
       </section>
       <aside class="sidebar" aria-label="对局控制">
-        <div class="mode-picker" role="group" aria-label="对战模式"><button class="mode active" data-mode="ai" aria-pressed="true">人机对战</button><button class="mode" data-mode="local" aria-pressed="false">同屏双人</button></div>
+        <div class="mode-picker" role="group" aria-label="对战模式"><button class="mode active" data-mode="ai" aria-pressed="true">人机对战</button><button class="mode" data-mode="local" aria-pressed="false">同屏双人</button><button class="mode" data-mode="online" aria-pressed="false">好友联机</button></div>
+        <section id="online-panel" class="online-panel" aria-label="联机房间" hidden>
+          <p id="online-profile"></p><button id="online-login" class="button primary">登录 / 注册</button>
+          <div id="room-controls" hidden><button id="room-create" class="button primary">创建好友房间</button><form id="room-join-form"><label for="room-code-input">输入六位房间码</label><div class="join-row"><input id="room-code-input" maxlength="6" minlength="6" pattern="[0-9a-fA-F]{6}" required autocomplete="off" placeholder="例如 A1B2C3"><button id="room-join" class="button">加入</button></div></form></div>
+          <div id="room-current" hidden><div class="room-code-row"><span>房间码 <strong id="room-code"></strong></span><button id="room-copy" class="text-button">复制</button></div><p id="room-info"></p><button id="room-resign" class="text-button">认输</button></div>
+          <p id="online-message" class="notice" role="status"></p>
+        </section>
         <label class="difficulty" id="difficulty-wrap">电脑难度<select id="difficulty"><option value="hard" selected>高手挑战</option><option value="normal">认真下棋</option><option value="easy">轻松入门</option></select></label>
         <div class="turn-status" aria-live="polite" aria-atomic="true"><div class="status-label" id="status-label">轮到白方</div><h2 id="status-title">落下一枚棋子</h2><p id="status-copy">点击棋盘上的空点，开始这场较量。</p></div>
         <div class="players">
@@ -48,8 +54,12 @@
     <footer><span>落子有声，方寸有趣。</span><span>三子成线 · 沿线移动 · 不可飞行</span></footer>
   </main>
   <dialog id="rules-dialog" aria-labelledby="rules-title"><div class="dialog-head"><p class="eyebrow">HOW TO PLAY</p><button class="text-button" id="rules-close" aria-label="关闭玩法说明">关闭 ×</button></div><h2 id="rules-title">一看就会的九子棋</h2><ol class="rules-list"><li><strong>轮流布子</strong><p>白方先手，双方各九枚棋子，交替放在 24 个空点上。没有斜线，中心也不能落子。</p></li><li><strong>三子成线，吃掉一子</strong><p>同色三子占满棋盘的一条完整连线，即可吃掉对方一子。优先吃未成线的棋子；只有对方全部成线时，才可吃线内棋子。一次同时成两条线，也只吃一子。拆开后再次成线，可以再次吃子。</p></li><li><strong>落完再走，三子不能飞</strong><p>双方九子全部落完后，每回合选中己方一子，沿线移动到相邻空点。不能跳过棋子，不能斜走。即使只剩三子，也只能走相邻一步。</p></li><li><strong>如何获胜</strong><p>布子结束后，使对方不足三子，或轮到对方时无棋可走，即获胜。同一棋盘、相同待落子数和行棋方出现三次，判和。</p></li></ol><p class="rules-note">人机模式下你执白先行；悔棋会撤回到你上次操作之前。对局自动保存在当前浏览器，刷新可继续。</p><button class="button primary" id="rules-done">开始下棋</button></dialog>
-  <dialog id="confirm-dialog" aria-labelledby="confirm-title"><p class="eyebrow">NEW GAME</p><h2 id="confirm-title">开始新的对局？</h2><p>当前这盘棋将结束。</p><div class="confirm-actions"><button class="button" id="confirm-cancel">继续当前棋局</button><button class="button primary" id="confirm-yes">开始新局</button></div></dialog>
+  <dialog id="confirm-dialog" aria-labelledby="confirm-title"><p class="eyebrow">NEW GAME</p><h2 id="confirm-title">开始新的对局？</h2><p>当前这盘本地棋局将结束。</p><div class="confirm-actions"><button class="button" id="confirm-cancel">继续当前棋局</button><button class="button primary" id="confirm-yes">开始新局</button></div></dialog>
   <noscript>请启用 JavaScript 来玩九子棋。</noscript>
-  <script type="module" src="./app.js?v=3"></script>
+  <dialog id="account-dialog" aria-labelledby="account-title"><div class="dialog-head"><p class="eyebrow">棋友账号</p><button id="account-close" class="text-button">关闭 ×</button></div><h2 id="account-title">欢迎回到棋桌</h2><div id="account-profile" hidden><p id="profile-copy"></p><button id="sign-out" class="button">退出登录</button></div><form id="account-form" class="account-form"><label>邮箱<input id="account-email" type="email" autocomplete="email" maxlength="254" required></label><label hidden>昵称<input id="account-nickname" maxlength="20" autocomplete="nickname"></label><label>密码<input id="account-password" type="password" minlength="8" maxlength="128" autocomplete="current-password" required><small>注册密码至少 8 位</small></label><label hidden>再次输入密码<input id="account-password-confirm" type="password" minlength="8" maxlength="128" autocomplete="new-password"></label><button id="account-submit" class="button primary" type="submit">登录</button></form><p id="account-message" class="notice" role="status"></p><div class="account-links"><button id="account-switch" class="text-button">还没有账号？免费注册</button><button id="forgot-password" class="text-button">忘记密码</button></div></dialog>
+  <dialog id="ranking-dialog" aria-labelledby="ranking-title"><div class="dialog-head"><p class="eyebrow">棋友榜</p><button id="ranking-close" class="text-button">关闭 ×</button></div><h2 id="ranking-title">方寸高手榜</h2><p id="ranking-message" role="status"></p><div class="ranking-scroll"><table class="ranking-table"><thead><tr><th>名次</th><th>棋友</th><th>积分</th><th>胜 / 负 / 和</th></tr></thead><tbody id="ranking-body"></tbody></table></div></dialog>
+  <dialog id="resign-dialog" aria-labelledby="resign-title"><h2 id="resign-title">结束当前房间？</h2><p id="resign-copy"></p><div class="confirm-actions"><button id="resign-cancel" class="button">继续对局</button><button id="resign-confirm" class="button primary">确认结束</button></div></dialog>
+  <script src="./vendor/supabase-2.119.1.js" defer></script>
+  <script type="module" src="./app.js?v=4"></script>
 </body>
 </html>
