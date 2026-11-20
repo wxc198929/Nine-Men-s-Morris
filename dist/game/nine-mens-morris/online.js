@@ -2,8 +2,8 @@ import {config} from '../shared/online-config.js';
 const $=id=>document.getElementById(id);
 const HOME='https://wxc198929.github.io/Nine-Men-s-Morris/game/nine-mens-morris/';
 export class OnlineController {
-  constructor(changed) {
-    this.changed=changed;this.user=null;this.profile=null;this.room=null;this.busy=false;this.active=false;this.connected=true;this.authMode='login';this.epoch=0;
+  constructor(changed,getSide=()=>1) {
+    this.getSide=getSide;this.changed=changed;this.user=null;this.profile=null;this.room=null;this.busy=false;this.active=false;this.connected=true;this.authMode='login';this.epoch=0;
     try {
       this.client=window.supabase.createClient(config.url,config.key);
       this.client.auth.onAuthStateChange((event,session)=>{
@@ -24,8 +24,8 @@ export class OnlineController {
       try {const {error}=await this.client.auth.signOut();if(error)throw error;$('account-dialog').close();}
       catch(e){$('account-message').textContent=this.error(e);}
     };
-    $('room-create').onclick=()=>this.roomCommand('create');
-    $('room-join-form').onsubmit=e=>{e.preventDefault();this.roomCommand('join',{code:$('room-code-input').value.trim().toUpperCase()});};
+    $('room-create').onclick=()=>this.roomCommand('create',{side:this.getSide()});
+    $('room-join-form').onsubmit=e=>{e.preventDefault();this.roomCommand('join',{code:$('room-code-input').value.trim().toUpperCase(),side:Number($('room-join-side').value)});};
     $('room-copy').onclick=async()=>{
       try {await navigator.clipboard.writeText(this.room.code);this.setMessage('房间码已复制，发给好友即可加入。');}
       catch {this.setMessage('请选中房间码并复制，发给好友。');}
@@ -147,7 +147,7 @@ export class OnlineController {
     $('online-message').textContent=this.message||(!this.user?'本地和人机模式无需登录。':'');
     if(this.room){
       $('room-code').textContent=this.room.code;
-      $('room-info').textContent=this.room.status==='waiting'?'你执白先行，等待好友加入':this.room.status==='playing'?`你执${this.side===1?'白':'黑'} · ${this.connected?'已连接':'正在重连'}`:this.room.status==='cancelled'?'房间已取消':'对局已结束，可创建新房间';
+      $('room-info').textContent=this.room.status==='waiting'?`你执${this.side===1?'白先手':'黑后手'}，等待好友加入`:this.room.status==='playing'?`你执${this.side===1?'白先手':'黑后手'} · ${this.connected?'已连接':'正在重连'}`:this.room.status==='cancelled'?'房间已取消':'对局已结束，可创建新房间';
       $('room-resign').hidden=!live;$('room-resign').textContent=this.room.status==='waiting'?'取消房间':'认输';
       $('room-copy').hidden=this.room.status!=='waiting';
     }

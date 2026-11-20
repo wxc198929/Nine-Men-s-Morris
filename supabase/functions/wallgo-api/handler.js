@@ -46,10 +46,15 @@ export function createHandler(admin) {
         return reply({profile,room:rooms[0]?await roomView(rooms[0].id,user.id):null});
       }
       let id=body.roomId;
-      if(body.command==='create') id=await checked(admin.rpc('wallgo_create',{p_user:user.id,p_state:newGame(body.players??2)}));
+      if(body.command==='create') {
+        const state=newGame(body.players??2),side=body.side??1;
+        if(!Number.isInteger(side)||side<1||side>state.players)throw new Error('执方选择无效');
+        id=await checked(admin.rpc('wallgo_create_seated',{p_user:user.id,p_state:state,p_side:side}));
+      }
       else if(body.command==='join') {
         if(!/^[0-9A-F]{6}$/.test(body.code||'')) throw new Error('请输入六位房间码');
-        id=await checked(admin.rpc('wallgo_join',{p_user:user.id,p_code:body.code}));
+        const side=body.side??0;if(![0,1,2,3].includes(side))throw new Error('执方选择无效');
+        id=await checked(admin.rpc('wallgo_join_seated',{p_user:user.id,p_code:body.code,p_side:side}));
       } else if(!['room','move','resign'].includes(body.command)) throw new Error('未知操作');
       if(typeof id!=='string' || !/^[0-9a-f-]{36}$/.test(id)) throw new Error('房间编号无效');
       if(['move','resign'].includes(body.command)) {

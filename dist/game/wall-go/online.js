@@ -2,8 +2,8 @@ import {config} from '../shared/online-config.js';
 const $=id=>document.getElementById(id);
 const HOME='https://wxc198929.github.io/Nine-Men-s-Morris/game/wall-go/';
 export class OnlineController {
-  constructor(changed,getPlayers=()=>2) {
-    this.getPlayers=getPlayers;this.changed=changed;this.user=null;this.profile=null;this.room=null;this.busy=false;this.active=false;this.connected=true;this.authMode='login';this.epoch=0;
+  constructor(changed,getPlayers=()=>2,getSide=()=>1) {
+    this.getSide=getSide;this.getPlayers=getPlayers;this.changed=changed;this.user=null;this.profile=null;this.room=null;this.busy=false;this.active=false;this.connected=true;this.authMode='login';this.epoch=0;
     try {
       this.client=window.supabase.createClient(config.url,config.key);
       this.client.auth.onAuthStateChange((event,session)=>{
@@ -24,8 +24,8 @@ export class OnlineController {
       try {const {error}=await this.client.auth.signOut();if(error)throw error;$('account-dialog').close();}
       catch(e){$('account-message').textContent=this.error(e);}
     };
-    $('room-create').onclick=()=>this.roomCommand('create',{players:this.getPlayers()});
-    $('room-join-form').onsubmit=e=>{e.preventDefault();this.roomCommand('join',{code:$('room-code-input').value.trim().toUpperCase()});};
+    $('room-create').onclick=()=>this.roomCommand('create',{players:this.getPlayers(),side:this.getSide()});
+    $('room-join-form').onsubmit=e=>{e.preventDefault();this.roomCommand('join',{code:$('room-code-input').value.trim().toUpperCase(),side:Number($('room-join-side').value)});};
     $('room-copy').onclick=async()=>{
       try {await navigator.clipboard.writeText(this.room.code);this.setMessage('房间码已复制，发给好友即可加入。');}
       catch {this.setMessage('请选中房间码并复制，发给好友。');}

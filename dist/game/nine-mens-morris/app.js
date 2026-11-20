@@ -1,5 +1,5 @@
 import {POINTS,LABELS,MILLS,newGame,count,legalActions,play,chooseTurn,positionKey} from './engine.js';
-import {OnlineController} from './online.js';
+import {OnlineController} from './online.js?v=2';
 const $ = id => document.getElementById(id);
 const STORAGE = 'morris-no-flying-v1';
 const VARIETY_STORAGE = 'morris-ai-variety-v1';
@@ -8,12 +8,13 @@ try {
   const savedChoices = JSON.parse(localStorage.getItem(VARIETY_STORAGE));
   if (savedChoices && typeof savedChoices === 'object' && !Array.isArray(savedChoices)) recentAI = Object.fromEntries(Object.entries(savedChoices).filter(([,choice]) => typeof choice === 'string').slice(-128));
 } catch {}
-let mode = 'ai', level = 'hard', selected = null, generation = 0, busy = false, worker = null;
+let mode = 'ai', level = 'hard', humanSide = 1, selected = null, generation = 0, busy = false, worker = null;
 let timeline = [{state:newGame(),note:'棋盘已备好，白方先行。',actor:0}];
 try {
   const saved = JSON.parse(localStorage.getItem(STORAGE));
   if (saved?.version === 1 && ['ai','local'].includes(saved.mode) && Array.isArray(saved.timeline) && saved.timeline.length && saved.timeline.every(f => f.state?.board?.length === 24 && f.state.board.every(v => [0,1,2].includes(v)) && f.state.reserves?.length === 2 && f.state.reserves.every(v => Number.isInteger(v) && v >= 0 && v <= 9) && [1,2].includes(f.state.player) && f.state.repetitions && typeof f.note === 'string')) {
     mode = saved.mode;
+    humanSide = [1,2].includes(saved.humanSide) ? saved.humanSide : 1;
     level = ['easy','normal','hard'].includes(saved.level) ? saved.level : 'hard';
     timeline = saved.timeline;
   }
@@ -32,7 +33,7 @@ const pointButtons = POINTS.map(([x,y],i) => {
 });
 function persist() {
   if (mode === 'online') return;
-  try { localStorage.setItem(STORAGE,JSON.stringify({version:1,mode,level,timeline:timeline.slice(-160)})); } catch {}
+  try { localStorage.setItem(STORAGE,JSON.stringify({version:1,mode,level,humanSide,timeline:timeline.slice(-160)})); } catch {}
 }
 function actionNote(s,a) {
   const name = s.player === 1 ? '白方' : '黑方';
@@ -51,7 +52,7 @@ function applyAction(a) {
 function handlePoint(i) {
   const s = state();
   if (mode === 'online' && !online.canMove) return;
-  if (s.winner || s.draw || busy || (mode === 'ai' && s.player === 2)) return;
+  if (s.winner || s.draw || busy || (mode === 'ai' && s.player !== humanSide)) return;
   const actions = legalActions(s);
   if (s.capture || s.reserves[s.player-1] > 0) {
     const action = actions.find(a => a.at === i);
@@ -77,7 +78,7 @@ function render() {
   const s = state();
   const over = !!s.winner || s.draw;
   const actions = legalActions(s);
-  const computerTurn = mode === 'ai' && s.player === 2 && !over;
+  const computerTurn = mode === 'ai' && s.player !== humanSide && !over;
   const onlineBlocked = mode === 'online' && !online.canMove;
   const destination = s.last?.type === 'place' ? s.last.at : s.last?.type === 'move' ? s.last.to : -1;
   pointButtons.forEach((button,i) => {
@@ -114,12 +115,15 @@ function render() {
     rack.className = 'reserve-stones' + (p === 2 ? ' dark' : '');
     rack.replaceChildren(...Array.from({length:9},(_,i) => {const dot = document.createElement('i');if (i >= s.reserves[p-1]) dot.className = 'used';return dot;}));
   }
-  $('name-1').textContent = mode === 'ai' ? '你 · 白方' : '白方';
-  $('name-2').textContent = mode === 'ai' ? '电脑 · 黑方' : '黑方';
+  for(const p of [1,2])$('name-'+p).textContent=(mode==='ai'?(p===humanSide?'你':'电脑'):p===humanSide?'玩家一':'玩家二')+' · '+(p===1?'白方':'黑方');
+  const liveRoom=mode==='online'&&online.room&&['waiting','playing'].includes(online.room.status);
+  $('seat-choice').value=String(liveRoom?online.side:humanSide);$('seat-choice').disabled=!!liveRoom||(mode==='online'&&online.busy);
+  $('seat-label').textContent=mode==='local'?'玩家一顺序':mode==='online'?liveRoom?'本局顺序':'房主顺序':'你的顺序';
+  $('seat-note').textContent=mode==='online'?'创建房间按此选位；加入时可另选空位。':mode==='local'?'白方先行，所选执方归玩家一。':humanSide===1?'你执白先行，电脑执黑。':'电脑执白先行，你执黑。';
   $('difficulty-wrap').hidden = mode !== 'ai';
   $('difficulty').value = level;
   document.querySelectorAll('[data-mode]').forEach(b => {b.classList.toggle('active',b.dataset.mode === mode);b.setAttribute('aria-pressed',String(b.dataset.mode === mode));});
-  $('undo').disabled = !timeline.slice(1).some(f => mode === 'local' || f.actor === 1);
+  $('undo').disabled = !timeline.slice(1).some(f => mode === 'local' || f.actor === humanSide);
   if (mode === 'online') {
     $('undo').disabled=true;$('restart').disabled=true;
     const room=online.room;
@@ -150,7 +154,7 @@ function cancelAI() {
 }
 function scheduleAI() {
   const s = state();
-  if (mode !== 'ai' || s.player !== 2 || s.winner || s.draw || busy) return;
+  if (mode !== 'ai' || s.player === humanSide || s.winner || s.draw || busy) return;
   busy = true;
   render();
   const id = ++generation;
@@ -187,34 +191,37 @@ function scheduleAI() {
   } catch { fallback(); }
 }
 let pendingReset = null;
-function reset(nextMode = mode) {
+function reset(nextMode = mode, nextSide = humanSide) {
   cancelAI();
   mode = nextMode;
+  humanSide = nextSide;
   selected = null;
   timeline = [{state:newGame(),note:'棋盘已备好，白方先行。',actor:0}];
   online.activate(mode === 'online');
   if (mode === 'online' && online.room) timeline=[{state:online.room.state,note:'联机棋局已恢复。',actor:0}];
-  persist();render();
+  persist();render();scheduleAI();
 }
-function requestReset(nextMode = mode) {
-  if (mode === 'online') {reset(nextMode);return;}
-  if (timeline.length === 1 || state().winner || state().draw) {reset(nextMode);return;}
-  pendingReset = nextMode;
+function requestReset(nextMode = mode, nextSide = humanSide) {
+  if (mode === 'online') {reset(nextMode,nextSide);return;}
+  if (timeline.length === 1 || state().winner || state().draw) {reset(nextMode,nextSide);return;}
+  pendingReset = {mode:nextMode,side:nextSide};
+  $('seat-choice').value=String(humanSide);
   $('confirm-dialog').showModal();
 }
 $('restart').addEventListener('click',() => requestReset());
 $('play-again').addEventListener('click',() => reset());
 $('confirm-cancel').addEventListener('click',() => {$('confirm-dialog').close();pendingReset = null;});
-$('confirm-yes').addEventListener('click',() => {$('confirm-dialog').close();reset(pendingReset || mode);pendingReset = null;});
+$('confirm-yes').addEventListener('click',() => {$('confirm-dialog').close();const next=pendingReset;pendingReset = null;reset(next?.mode||mode,next?.side||humanSide);});
+$('seat-choice').addEventListener('change',()=>requestReset(mode,Number($('seat-choice').value)));
 document.querySelectorAll('[data-mode]').forEach(b => b.addEventListener('click',() => {if (b.dataset.mode !== mode) requestReset(b.dataset.mode);}));
 $('undo').addEventListener('click',() => {
   if (mode === 'online') return;
   cancelAI();
   if (mode === 'local') { if (timeline.length > 1) timeline.pop(); }
   else {
-    let index = timeline.findLastIndex(f => f.actor === 1);
+    let index = timeline.findLastIndex(f => f.actor === humanSide);
     if (index > 0) {
-      while (index > 1 && timeline[index-1].state.player === 1 && timeline[index-1].state.capture) index--;
+      while (index > 1 && timeline[index-1].state.player === humanSide && timeline[index-1].state.capture) index--;
       timeline = timeline.slice(0,index);
     }
   }
@@ -230,6 +237,6 @@ const online = new OnlineController(() => {
     timeline=[{state:next,note:'联机棋局已同步。',actor:0}];
     render();
   }
-});
+},()=>humanSide);
 render();
 scheduleAI();

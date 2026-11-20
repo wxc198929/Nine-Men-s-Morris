@@ -3,7 +3,7 @@ export const PUBLIC_PROFILE = 'user_id,nickname,rating,wins,losses,draws';
 export function nextState(room,userId,action,kind) {
   const side=room.white_id===userId ? 1 : room.black_id===userId ? 2 : 0;
   if (!side) throw new Error('你不是这个房间的玩家');
-  if (kind==='resign' && room.status==='waiting' && side===1) return room.state;
+  if (kind==='resign' && room.status==='waiting' && userId===(room.host_id||room.white_id)) return room.state;
   if (room.status!=='playing') throw new Error('对局尚未开始或已结束');
   if (kind==='resign') return {...room.state,winner:3-side,draw:false,capture:false,reason:`${side===1?'白':'黑'}方认输`};
   if (kind!=='move' || room.state.player!==side) throw new Error('还未轮到你');
@@ -46,10 +46,14 @@ export function createHandler(admin) {
         return reply({profile,room:rooms[0]?await roomView(rooms[0].id,user.id):null});
       }
       let id=body.roomId;
-      if(body.command==='create') id=await checked(admin.rpc('morris_create',{p_user:user.id,p_state:newGame()}));
+      if(body.command==='create') {
+        const side=body.side??1;if(![1,2].includes(side))throw new Error('请选择先手或后手');
+        id=await checked(admin.rpc('morris_create_seated',{p_user:user.id,p_state:newGame(),p_side:side}));
+      }
       else if(body.command==='join') {
         if(!/^[0-9A-F]{6}$/.test(body.code||'')) throw new Error('请输入六位房间码');
-        id=await checked(admin.rpc('morris_join',{p_user:user.id,p_code:body.code}));
+        const side=body.side??0;if(![0,1,2].includes(side))throw new Error('执方选择无效');
+        id=await checked(admin.rpc('morris_join_seated',{p_user:user.id,p_code:body.code,p_side:side}));
       } else if(!['room','move','resign'].includes(body.command)) throw new Error('未知操作');
       if(typeof id!=='string' || !/^[0-9a-f-]{36}$/.test(id)) throw new Error('房间编号无效');
       if(['move','resign'].includes(body.command)) {
