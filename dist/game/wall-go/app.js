@@ -1,13 +1,16 @@
-import {newGame,play,legalActions,reachable,breakOptions,availableWalls,regions,EDGES,LABELS,actionNote,playerCount,sideName,setupOrder} from './engine.js?v=2';
-import {OnlineController} from './online.js?v=2';
-import {chooseAction} from './search.js?v=2';
-const $=id=>document.getElementById(id),STORAGE='wall-go-v2',colors=['','red','blue','green'],short=['','红','蓝','绿'];
+import {newGame,play,legalActions,reachable,breakOptions,availableWalls,regions,EDGES,LABELS,actionNote,playerCount,sideName,setupOrder,stonesPerPlayer} from './engine.js?v=3';
+import {OnlineController} from './online.js?v=3';
+import {chooseAction} from './search.js?v=3';
+const $=id=>document.getElementById(id),STORAGE='wall-go-v3',colors=['','red','blue','green'],short=['','红','蓝','绿'];
 let mode='ai',level='hard',playerTotal=2,timeline=[{state:newGame(),actor:0}],selected=null,pending=null,breaking=false,selectedBreak=null,worker=null,busy=false,generation=0,online=null,pendingSettings=null;
 let recent={};
 try{
-  const saved=JSON.parse(localStorage.getItem(STORAGE));
+  const current=JSON.parse(localStorage.getItem(STORAGE));
+  const saved=current||JSON.parse(localStorage.getItem('wall-go-v2'));
   if(saved&&['ai','local'].includes(saved.mode)&&[2,3].includes(saved.players)&&Array.isArray(saved.actions)&&saved.actions.length<=100){
-    const loaded=[{state:newGame(saved.players),actor:0}];for(const a of saved.actions){const s=loaded.at(-1).state;loaded.push({state:play(s,a),actor:s.player,action:a});}
+    const loaded=[{state:newGame(saved.players),actor:0}];
+    // Old four-stone three-player replays need a fresh game; two-player replays remain valid.
+    for(const a of !current&&saved.players===3?[]:saved.actions){const s=loaded.at(-1).state;loaded.push({state:play(s,a),actor:s.player,action:a});}
     timeline=loaded;mode=saved.mode;playerTotal=saved.players;level=['easy','normal','hard'].includes(saved.level)?saved.level:'hard';
   }
   recent=JSON.parse(localStorage.getItem('wall-go-variety-v2'))||{};
@@ -77,7 +80,7 @@ function render(){
   const side=sideName(s.player),thinking=mode==='ai'&&s.player!==1&&!ended;
   let label=ended?'胜负已分':thinking?side+'电脑正在思考':'轮到'+side;
   let title=ended?resultTitle(s):s.phase==='setup'?side+'放置一枚棋子':pending?'在亮起的边上筑墙':breaking&&selectedBreak===null?'选择要打碎的墙':selected===null?'选一枚棋子出发':'走到两步内的空格';
-  let copy=ended?s.reason:thinking?'电脑正在推演围地与封锁，请稍候。':s.phase==='setup'?(n===3?'三方各四子，按红蓝绿、绿蓝红往返布子。':'开局顺序为红、蓝、蓝、红，点击空格布子。'):pending?(pending.breakWall!==undefined?'破墙和移动尚未提交，筑墙后才消耗一次机会。':'选一道金色墙完成回合，或点击“重选走法”。'):breaking?(selectedBreak===null?'选择橙红色墙；可在第一步或第二步跨墙。':'走1–2步跨过选中的墙，终点仍须筑一道墙。'):selected===null?'先选己方棋子，必须移动1–2步，不能原地筑墙。':'可以拐弯，不能穿墙或越子；移动后必须筑墙。';
+  let copy=ended?s.reason:thinking?'电脑正在推演围地与封锁，请稍候。':s.phase==='setup'?(n===3?'三方各' + (stonesPerPlayer(s)===2?'两':'四') + '子，按红蓝绿、绿蓝红往返布子。':'开局顺序为红、蓝、蓝、红，点击空格布子。'):pending?(pending.breakWall!==undefined?'破墙和移动尚未提交，筑墙后才消耗一次机会。':'选一道金色墙完成回合，或点击“重选走法”。'):breaking?(selectedBreak===null?'选择橙红色墙；可在第一步或第二步跨墙。':'走1–2步跨过选中的墙，终点仍须筑一道墙。'):selected===null?'先选己方棋子，必须移动1–2步，不能原地筑墙。':'可以拐弯，不能穿墙或越子；移动后必须筑墙。';
   if(s.skipped?.length&&!ended&&!pending)copy+=' '+s.skipped.map(sideName).join('、')+'无合法走法，已跳过。';
   if(mode==='online'&&!ended&&!human){
     const waiting=!online.room||online.room.status!=='playing';
@@ -104,7 +107,7 @@ function render(){
   $('difficulty-wrap').hidden=mode!=='ai';$('difficulty').value=level;
   const live=mode==='online'&&online?.room&&['waiting','playing'].includes(online.room.status);
   $('player-count').value=String(live?online.room.capacity:playerTotal);$('player-count').disabled=!!live;
-  $('player-count-note').textContent=n===3?'三方各四子 · 每人一次破墙跨越':'双人各四子 · 不可破墙';
+  $('player-count-note').textContent=n===3?'三方各'+(stonesPerPlayer(s)===2?'两':'四')+'子 · 每人一次破墙跨越':'双人各四子 · 不可破墙';
   document.querySelectorAll('[data-mode]').forEach(b=>{b.classList.toggle('active',b.dataset.mode===mode);b.setAttribute('aria-pressed',String(b.dataset.mode===mode));});
   $('undo').disabled=mode==='online'||!(pending||selected!==null||timeline.slice(1).some(f=>mode==='local'||f.actor===1));$('restart').disabled=mode==='online';
   $('last-move').textContent=actionNote(s.last);
@@ -124,7 +127,7 @@ function scheduleAI(){
     busy=false;try{apply(action);}catch{const fallback=legalActions(state())[0];if(fallback)apply(fallback);}scheduleAI();
   },Math.max(0,400-(performance.now()-start)));
   const fallback=()=>{if(id!==generation)return;worker?.terminate();worker=null;const chosen=chooseAction(s,{level:'easy',timeMs:80}).action;if(chosen)deliver(chosen);else{busy=false;render();}};
-  try{worker=new Worker(new URL('./ai-worker.js?v=2',import.meta.url),{type:'module'});worker.onmessage=({data})=>{if(id!==generation||data.id!==id)return;worker?.terminate();worker=null;if(data.error)fallback();else deliver(data.action);};worker.onerror=fallback;worker.postMessage({id,state:s,level,avoid:recent[key(s)]||''});}catch{fallback();}
+  try{worker=new Worker(new URL('./ai-worker.js?v=3',import.meta.url),{type:'module'});worker.onmessage=({data})=>{if(id!==generation||data.id!==id)return;worker?.terminate();worker=null;if(data.error)fallback();else deliver(data.action);};worker.onerror=fallback;worker.postMessage({id,state:s,level,avoid:recent[key(s)]||''});}catch{fallback();}
 }
 function reset(nextMode=mode,nextPlayers=playerTotal){
   cancelAI();mode=nextMode;playerTotal=nextPlayers;clearChoice();

@@ -1,18 +1,19 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import {Worker} from 'node:worker_threads';
-import {newGame,play,legalActions,breakOptions,edge,regions,resign} from '../dist/game/wall-go/engine.js';
+import {newGame,play,legalActions,breakOptions,edge,regions,resign,stonesPerPlayer} from '../dist/game/wall-go/engine.js';
 import {chooseAction} from '../dist/game/wall-go/search.js';
 import {nextState} from '../supabase/functions/wallgo-api/handler.js';
 function fixture(){const s=newGame(3);s.phase='play';s.board[24]=1;s.board[0]=2;s.board[48]=3;return s;}
-const setup=[0,6,48,42,24,12,36,8,40,16,32,22];
+const setup=[0,6,48,42,24,12];
 test('a lone setup stone does not prematurely claim all territory',()=>{
   const s=play(newGame(3),{type:'place',at:24});assert.deepEqual(regions(s).scores,[0,0,0]);assert.ok(regions(s).owners.every(p=>p===0));
 });
-test('three sides place four stones each in a balanced snake order, then rotate red blue green',()=>{
+test('three sides place exactly two stones each in six placements, then rotate red blue green',()=>{
   let s=newGame(3);const order=[];for(const at of setup){order.push(s.player);s=play(s,{type:'place',at});}
-  assert.deepEqual(order,[1,2,3,3,2,1,1,2,3,3,2,1]);assert.equal(s.phase,'play');assert.deepEqual(s.breaks,[1,1,1]);
-  for(const p of [1,2,3]){assert.equal(s.board.filter(v=>v===p).length,4);assert.equal(s.player,p);s=play(s,legalActions(s)[0]);}
+  assert.deepEqual(order,[1,2,3,3,2,1]);assert.equal(s.phase,'play');assert.equal(stonesPerPlayer(s),2);assert.deepEqual(s.breaks,[1,1,1]);
+  assert.throws(()=>play(s,{type:'place',at:22}));
+  for(const p of [1,2,3]){assert.equal(s.board.filter(v=>v===p).length,2);assert.equal(s.player,p);s=play(s,legalActions(s)[0]);}
   assert.equal(s.player,1);assert.throws(()=>newGame(4));
 });
 test('break and crossing may occur on either step, with a turn after crossing',()=>{
@@ -75,7 +76,7 @@ test('server authorizes green, rejects forged credits and passes only the bounde
   assert.throws(()=>nextState(room,'red',{type:'turn',from:24,to:25,breakWall:wall,wall:edge(25,0),breaks:[1,1,1]},'move'));
   room.state.breaks[0]=1;const n=nextState(room,'red',{type:'turn',from:24,to:25,breakWall:wall,wall:edge(25,0),winner:1},'move');assert.equal(n.breaks[0],0);assert.equal(n.winner,null);
 });
-test('random complete three-player games terminate, preserve all twelve stones and never overspend break credits',()=>{
+test('random complete three-player games terminate, preserve all six stones and never overspend break credits',()=>{
   let seed=983;const random=()=>((seed=(seed*1664525+1013904223)>>>0)/4294967296);
   for(let game=0;game<12;game++){
     let s=newGame(3),turns=0;const spent=[0,0,0];
@@ -84,7 +85,7 @@ test('random complete three-player games terminate, preserve all twelve stones a
       assert.deepEqual(s,before);
       if(s.phase==='play'){
         assert.notEqual(a.from,a.to);if(a.breakWall!==undefined)spent[s.player-1]++;
-        for(const p of [1,2,3]){assert.equal(n.board.filter(v=>v===p).length,4);assert.ok(spent[p-1]<=1);assert.equal(n.breaks[p-1],1-spent[p-1]);}
+        for(const p of [1,2,3]){assert.equal(n.board.filter(v=>v===p).length,2);assert.ok(spent[p-1]<=1);assert.equal(n.breaks[p-1],1-spent[p-1]);}
       }
       s=n;assert.ok(++turns<=100);
     }

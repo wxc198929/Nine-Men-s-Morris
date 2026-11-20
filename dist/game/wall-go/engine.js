@@ -3,8 +3,9 @@ export const LABELS=Array.from({length:49},(_,i)=>'ABCDEFG'[i%7]+(7-Math.floor(i
 export const SETUP_ORDER=[1,2,2,1];
 export const DIRECTIONS=['上','右','下','左'];
 export const playerCount=s=>s.players===3?3:2;
+export const stonesPerPlayer=s=>playerCount(s)===3?(s.version===2?4:2):4;
 export const sideName=p=>['','红方','蓝方','绿方'][p]||'棋友';
-export const setupOrder=s=>playerCount(s)===3?[1,2,3,3,2,1,1,2,3,3,2,1]:SETUP_ORDER;
+export const setupOrder=s=>playerCount(s)===3?(stonesPerPlayer(s)===4?[1,2,3,3,2,1,1,2,3,3,2,1]:[1,2,3,3,2,1]):SETUP_ORDER;
 export function neighbor(at,dir){
   const r=Math.floor(at/7),c=at%7;
   if(dir===0)return r?at-7:-1;
@@ -23,7 +24,7 @@ export function newGame(players=2){
   if(![2,3].includes(players))throw new Error('请选择双人或三人');
   const board=Array(49).fill(0);
   if(players===2){board[12]=board[36]=1;board[8]=board[40]=2;}
-  return {version:2,players,board,walls:Array(84).fill(0),breaks:Array(players).fill(players===3?1:0),eliminated:[],phase:'setup',placed:0,player:1,turn:1,winner:null,winners:[],draw:false,reason:'',last:null};
+  return {version:3,players,board,walls:Array(84).fill(0),breaks:Array(players).fill(players===3?1:0),eliminated:[],phase:'setup',placed:0,player:1,turn:1,winner:null,winners:[],draw:false,reason:'',last:null};
 }
 export function reachable(s,from){
   if(!Number.isInteger(from)||from<0||from>=49||!s.board[from])return [];

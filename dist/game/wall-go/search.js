@@ -1,4 +1,4 @@
-import {legalActions,applyUnchecked,regions,neighbor,edge,playerCount} from './engine.js?v=2';
+import {legalActions,applyUnchecked,regions,neighbor,edge,playerCount} from './engine.js?v=3';
 function distances(s,p){
   const d=Array(49).fill(99),q=[];
   for(let i=0;i<49;i++)if(s.board[i]===p){d[i]=0;q.push(i);}
