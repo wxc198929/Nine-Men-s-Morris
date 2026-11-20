@@ -1,23 +1,23 @@
-import {newGame,play} from './engine.js';
+import {newGame,play,resign} from './engine.js';
 export const PUBLIC_PROFILE = 'user_id,nickname,rating,wins,losses,draws';
 export function nextState(room,userId,action,kind) {
-  const side=room.white_id===userId ? 1 : room.black_id===userId ? 2 : 0;
+  const side=room.white_id===userId ? 1 : room.black_id===userId ? 2 : room.green_id===userId ? 3 : 0;
   if (!side) throw new Error('你不是这个房间的玩家');
-  if (kind==='resign' && room.status==='waiting' && side===1) return room.state;
+  if (kind==='resign' && room.status==='waiting') return room.state;
   if (room.status!=='playing') throw new Error('对局尚未开始或已结束');
-  if (kind==='resign') return {...room.state,winner:3-side,draw:false,capture:false,reason:`${side===1?'红':'蓝'}方认输`};
+  if (kind==='resign') return resign(room.state,side);
   if (kind!=='move' || room.state.player!==side) throw new Error('还未轮到你');
   if (!action || typeof action!=='object') throw new Error('缺少走法');
   // Reconstruct a bounded action; never accept a client-supplied state or result.
-  const a=action.type==='turn' ? {type:'turn',from:action.from,to:action.to,wall:action.wall} : {type:action.type,at:action.at};
+  const a=action.type==='turn' ? {type:'turn',from:action.from,to:action.to,wall:action.wall,...(action.breakWall!==undefined?{breakWall:action.breakWall}:{})} : {type:action.type,at:action.at};
   return play(room.state,a);
 }
 export function createHandler(admin) {
   async function checked(promise) { const {data,error}=await promise;if(error) throw new Error(error.message);return data; }
   async function roomView(id,userId) {
     const r=await checked(admin.from('wallgo_rooms').select('*').eq('id',id).single());
-    if(r.white_id!==userId && r.black_id!==userId) throw new Error('无权查看此房间');
-    const players=await checked(admin.from('wallgo_profiles').select(PUBLIC_PROFILE).in('user_id',[r.white_id,r.black_id].filter(Boolean)));
+    if(r.white_id!==userId && r.black_id!==userId && r.green_id!==userId) throw new Error('无权查看此房间');
+    const players=await checked(admin.from('wallgo_profiles').select(PUBLIC_PROFILE).in('user_id',[r.white_id,r.black_id,r.green_id].filter(Boolean)));
     return {...r,players};
   }
   return async function(req) {
@@ -42,11 +42,11 @@ export function createHandler(admin) {
       const user=data.user;
       const profile=await checked(admin.rpc('wallgo_ensure_profile',{p_user:user.id,p_nickname:typeof user.user_metadata?.nickname==='string'?user.user_metadata.nickname:'棋友'}));
       if(body.command==='me') {
-        const rooms=await checked(admin.from('wallgo_rooms').select('id').or(`white_id.eq.${user.id},black_id.eq.${user.id}`).in('status',['waiting','playing']).order('updated_at',{ascending:false}).limit(1));
+        const rooms=await checked(admin.from('wallgo_rooms').select('id').or(`white_id.eq.${user.id},black_id.eq.${user.id},green_id.eq.${user.id}`).in('status',['waiting','playing']).order('updated_at',{ascending:false}).limit(1));
         return reply({profile,room:rooms[0]?await roomView(rooms[0].id,user.id):null});
       }
       let id=body.roomId;
-      if(body.command==='create') id=await checked(admin.rpc('wallgo_create',{p_user:user.id,p_state:newGame()}));
+      if(body.command==='create') id=await checked(admin.rpc('wallgo_create',{p_user:user.id,p_state:newGame(body.players??2)}));
       else if(body.command==='join') {
         if(!/^[0-9A-F]{6}$/.test(body.code||'')) throw new Error('请输入六位房间码');
         id=await checked(admin.rpc('wallgo_join',{p_user:user.id,p_code:body.code}));
